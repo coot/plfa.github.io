@@ -16,12 +16,15 @@ This chapter introduces universal and existential quantification.
 
 \begin{code}
 import Relation.Binary.PropositionalEquality as Eq
-open Eq using (_≡_; refl)
+open Eq using (_≡_; refl; cong; sym)
+open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; _≡⟨_⟩_; _∎)
 open import Data.Nat using (ℕ; zero; suc; _+_; _*_)
+open import Data.Nat.Properties using (+-identityʳ; +-comm; +-assoc; *-zeroˡ; *-identityˡ; *-distribʳ-+)
 open import Relation.Nullary using (¬_)
-open import Data.Product using (_×_; proj₁) renaming (_,_ to ⟨_,_⟩)
-open import Data.Sum using (_⊎_)
+open import Data.Product using (_×_; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
+open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import plfa.Isomorphism using (_≃_; extensionality)
+open import Function using (_∘_)
 \end{code}
 
 
@@ -85,9 +88,17 @@ dependent product is ambiguous.
 
 Show that universals distribute over conjunction:
 \begin{code}
-postulate
-  ∀-distrib-× : ∀ {A : Set} {B C : A → Set} →
-    (∀ (x : A) → B x × C x) ≃ (∀ (x : A) → B x) × (∀ (x : A) → C x)
+-- postulate
+  -- ∀-distrib-× : ∀ {A : Set} {B C : A → Set} →
+    -- (∀ (x : A) → B x × C x) ≃ (∀ (x : A) → B x) × (∀ (x : A) → C x)
+∀-distrib-× : ∀ {A : Set} {B C : A → Set} →
+  (∀ (x : A) → B x × C x) ≃ (∀ (x : A) → B x) × (∀ (x : A) → C x)
+∀-distrib-× = record
+  { to      = λ{f → ⟨ proj₁ ∘ f , proj₂ ∘ f ⟩ }
+  ; from    = λ{⟨ f , g ⟩ → λ{x → ⟨ f x , g x ⟩ }}
+  ; from∘to = λ{f → refl}
+  ; to∘from = λ{f → refl}
+  }
 \end{code}
 Compare this with the result (`→-distrib-×`) in
 Chapter [Connectives][plfa.Connectives].
@@ -239,18 +250,42 @@ establish the isomorphism is identical to what we wrote when discussing
 
 Show that existentials distribute over disjunction:
 \begin{code}
-postulate
-  ∃-distrib-⊎ : ∀ {A : Set} {B C : A → Set} →
-    ∃[ x ] (B x ⊎ C x) ≃ (∃[ x ] B x) ⊎ (∃[ x ] C x)
+∃-distrib-⊎ : ∀ {A : Set} {B C : A → Set}
+             → ∃[ x ] (B x ⊎ C x) ≃ (∃[ x ] B x) ⊎ (∃[ x ] C x)
+∃-distrib-⊎ =
+  record { to = to
+    ; from = from
+    ; from∘to = from∘to
+    ; to∘from = to∘from
+    }
+  where
+    to : ∀ {A : Set} {B C : A → Set}
+       → ∃[ x ] (B x ⊎ C x)
+       → (∃[ x ] B x) ⊎ (∃[ x ] C x)
+    to ⟨ x , inj₁ y ⟩ = inj₁ ⟨ x , y ⟩
+    to ⟨ x , inj₂ y ⟩ = inj₂ ⟨ x , y ⟩
+
+    from : ∀ {A : Set} {B C : A → Set} → (∃[ x ] B x) ⊎ (∃[ x ] C x) → ∃[ x ] (B x ⊎ C x)
+    from  (inj₁ ⟨ x , y ⟩) = ⟨ x , inj₁ y ⟩
+    from  (inj₂ ⟨ x , y ⟩) = ⟨ x , inj₂ y ⟩
+
+    from∘to : ∀ {A : Set} {B C : A → Set} → (x : ∃[ y ] (B y ⊎ C y)) → from (to x) ≡ x
+    from∘to ⟨ x , inj₁ y ⟩ = refl
+    from∘to ⟨ x , inj₂ y ⟩ = refl
+
+    to∘from : ∀ {a : Set} {B C : a → Set} → (x : (∃[ y ] B y) ⊎ (∃[ y ] C y)) → to (from x) ≡ x
+    to∘from (inj₁ ⟨ x , y ⟩) = refl
+    to∘from (inj₂ ⟨ x , y ⟩) = refl
 \end{code}
 
 #### Exercise `∃×-implies-×∃`
 
 Show that an existential of conjunctions implies a conjunction of existentials:
 \begin{code}
-postulate
-  ∃×-implies-×∃ : ∀ {A : Set} {B C : A → Set} →
-    ∃[ x ] (B x × C x) → (∃[ x ] B x) × (∃[ x ] C x)
+∃×-implies-×∃ : ∀ {A : Set} {B C : A → Set}
+               → ∃[ x ] (B x × C x)
+               → (∃[ x ] B x) × (∃[ x ] C x)
+∃×-implies-×∃ ⟨ x , ⟨ b , c ⟩ ⟩ = ⟨ ⟨ x , b ⟩ , ⟨ x , c ⟩ ⟩
 \end{code}
 Does the converse hold? If so, prove; if not, explain why.
 
@@ -368,7 +403,42 @@ by `2 * m` and `2 * m + 1`?  Rewrite the proofs of `∃-even` and `∃-odd` when
 restated in this way.
 
 \begin{code}
--- Your code goes here
+∃-even' : ∀ {n : ℕ} → ∃[ m ] (    2 * m ≡ n) → even n
+∃-odd'  : ∀ {n : ℕ} → ∃[ m ] (2 * m + 1 ≡ n) →  odd n
+
+∃-even' ⟨ zero   , refl ⟩ = even-zero
+∃-even' ⟨ suc m' , refl ⟩ = even-suc (∃-odd' ⟨ m' , lemma m' ⟩)
+  where
+    double : ∀ (k : ℕ) → 2 * k ≡ k + k
+    double zero    = refl
+    double (suc l) =
+      begin
+        2 * (suc l)
+      ≡⟨⟩
+        (1 + 1) * (suc l)
+       ≡⟨ *-distribʳ-+ (suc l) 1 1 ⟩
+        1 * (suc l) + 1 * (suc l)
+      ≡⟨ cong (_+ 1 * (suc l)) (*-identityˡ (suc l)) ⟩
+        suc l + 1 * (suc l)
+      ≡⟨ cong (suc l +_ ) (*-identityˡ (suc l)) ⟩
+        suc l + suc l
+      ∎
+
+    lemma : ∀ (k : ℕ) → 2 * k + 1 ≡ k + 1 * suc k
+    lemma k =
+      begin
+        2 * k + 1
+      ≡⟨ cong (_+ 1) (double k) ⟩
+        (k + k) + 1
+      ≡⟨ +-assoc k k 1 ⟩
+        k + (k + 1)
+      ≡⟨ cong (k +_) (+-comm k 1) ⟩
+        k + suc k
+      ≡⟨ cong (k +_) (sym (*-identityˡ (suc k))) ⟩
+        k + 1 * suc k
+      ∎
+
+∃-odd'  = {! !}
 \end{code}
 
 #### Exercise `∃-+-≤`

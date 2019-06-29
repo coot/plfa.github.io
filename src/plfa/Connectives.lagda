@@ -428,7 +428,22 @@ commutative and associative _up to isomorphism_.
 Show sum is commutative up to isomorphism.
 
 \begin{code}
--- Your code goes here
+⊎-comm : ∀ {A B : Set} → (A ⊎ B) ≃ (B ⊎ A)
+⊎-comm =
+  record
+    { to      = f
+    ; from    = f
+    ; from∘to = f∘f
+    ; to∘from = f∘f
+    }
+  where
+    f : ∀ {A B : Set} → A ⊎ B -> B ⊎ A
+    f (inj₁ x) = inj₂ x
+    f (inj₂ x) = inj₁ x
+
+    f∘f : ∀ {A B : Set} → (x : A ⊎ B) → f (f x) ≡ x
+    f∘f (inj₁ x) = refl
+    f∘f (inj₂ x) = refl
 \end{code}
 
 #### Exercise `⊎-assoc`
@@ -436,7 +451,34 @@ Show sum is commutative up to isomorphism.
 Show sum is associative up to isomorphism.
 
 \begin{code}
--- Your code goes here
+⊎-assoc : ∀ {A B C : Set} → A ⊎ (B ⊎ C) ≃ (A ⊎ B) ⊎ C
+⊎-assoc =
+  record
+    { to      = to
+    ; from    = from
+    ; from∘to = from∘to
+    ; to∘from = to∘from
+    }
+  where
+    to : ∀ {A B C : Set} → A ⊎ (B ⊎ C) → (A ⊎ B) ⊎ C
+    to (inj₁ a)        = inj₁ (inj₁ a)
+    to (inj₂ (inj₁ b)) = inj₁ (inj₂ b)
+    to (inj₂ (inj₂ c)) = inj₂ c
+
+    from : ∀ {A B C : Set} → (A ⊎ B) ⊎ C → A ⊎ (B ⊎ C)
+    from (inj₁ (inj₁ a)) = inj₁ a
+    from (inj₁ (inj₂ b)) = inj₂ (inj₁ b)
+    from (inj₂ c)        = inj₂ (inj₂ c)
+
+    from∘to : ∀ {A B C : Set} → (x : A ⊎ (B ⊎ C)) → from (to x) ≡ x
+    from∘to (inj₁ a)        = refl
+    from∘to (inj₂ (inj₁ b)) = refl
+    from∘to (inj₂ (inj₂ c)) = refl
+
+    to∘from : ∀ {A B C : Set} → (x : (A ⊎ B) ⊎ C) → to (from x) ≡ x
+    to∘from (inj₁ (inj₁ a)) = refl
+    to∘from (inj₁ (inj₂ b)) = refl
+    to∘from (inj₂ c)        = refl
 \end{code}
 
 ## False is empty
@@ -731,14 +773,16 @@ one of these laws is "more true" than the other.
 
 Show that the following property holds:
 \begin{code}
-postulate
-  ⊎-weak-× : ∀ {A B C : Set} → (A ⊎ B) × C → A ⊎ (B × C)
+-- postulate
+  -- ⊎-weak-× : ∀ {A B C : Set} → (A ⊎ B) × C → A ⊎ (B × C)
 \end{code}
 This is called a _weak distributive law_. Give the corresponding
 distributive law, and explain how it relates to the weak version.
 
 \begin{code}
--- Your code goes here
+⊎-weak-× : ∀ {A B C : Set} → (A ⊎ B) × C → A ⊎ (B × C)
+⊎-weak-× ⟨ inj₁ a , c ⟩ = inj₁ a
+⊎-weak-× ⟨ inj₂ b , c ⟩ = inj₂ ⟨ b , c ⟩
 \end{code}
 
 
@@ -746,13 +790,16 @@ distributive law, and explain how it relates to the weak version.
 
 Show that a disjunct of conjuncts implies a conjunct of disjuncts:
 \begin{code}
-postulate
-  ⊎×-implies-×⊎ : ∀ {A B C D : Set} → (A × B) ⊎ (C × D) → (A ⊎ C) × (B ⊎ D)
+-- postulate
+  -- ⊎×-implies-×⊎ : ∀ {A B C D : Set} → (A × B) ⊎ (C × D) → (A ⊎ C) × (B ⊎ D)
 \end{code}
 Does the converse hold? If so, prove; if not, give a counterexample.
 
 \begin{code}
 -- Your code goes here
+⊎×-implies-×⊎ : ∀ {A B C D : Set} → (A × B) ⊎ (C × D) → (A ⊎ C) × (B ⊎ D)
+⊎×-implies-×⊎ (inj₁ ⟨ a , b ⟩) = ⟨ inj₁ a , inj₁ b ⟩
+⊎×-implies-×⊎ (inj₂ ⟨ c , d ⟩) = ⟨ inj₂ c , inj₂ d ⟩
 \end{code}
 
 

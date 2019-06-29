@@ -263,7 +263,7 @@ about it from the Agda standard library:
 \begin{code}
 import Relation.Binary.PropositionalEquality as Eq
 open Eq using (_≡_; refl)
-open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; _∎)
+open Eq.≡-Reasoning using (begin_; _≡⟨⟩_; _≡⟨_⟩_; _∎)
 \end{code}
 
 The first line brings the standard library module that defines
@@ -917,7 +917,75 @@ represents a positive natural, and represent zero by `x0 nil`.
 Confirm that these both give the correct answer for zero through four.
 
 \begin{code}
--- Your code goes here
+inc : Bin → Bin
+inc nil    = x1 nil
+inc (x0 n) = x1 n
+inc (x1 n) = x0 (inc n)
+
+to : ℕ → Bin
+to zero    = nil
+to (suc n) = inc (to n)
+
+from : Bin → ℕ
+from nil    = zero
+from (x1 n) = 1 + 2 * (from n)
+from (x0 n) =     2 * (from n)
+
+-- 'to' preserves the Peano successor
+to-homomorphism : ∀ (n : ℕ) → to (suc n) ≡ inc (to n)
+to-homomorphism n =
+  begin
+    to (suc n)
+  ≡⟨⟩
+    inc (to n)
+  ∎
+
+postulate
+  -- TODO
+  pos-distributivity : ∀ (m n o : ℕ) → m * (n + o) ≡ m * n + m * o
+
+-- 'from' preserves the Peano successor
+from-homomorphism : ∀ (x : Bin) → from (inc x) ≡ suc (from x)
+from-homomorphism nil    = refl
+from-homomorphism (x0 x) =
+    begin
+      from (inc (x0 x))
+    ≡⟨⟩
+      from (x1 x)
+    ≡⟨⟩
+      1 + from (x0 x)
+    ≡⟨⟩
+      suc (from (x0 x))
+    ∎
+from-homomorphism (x1 x) =
+    begin
+      from (inc (x1 x))
+    ≡⟨⟩
+      from (x0 (inc x))
+    ≡⟨⟩
+      2 * from (inc x)
+    ≡⟨ Eq.cong (2 *_) (from-homomorphism x) ⟩
+      2 * (1 + from x)
+    ≡⟨ pos-distributivity 2 1 (from x) ⟩
+      2 * 1 + 2 * from x
+    ≡⟨⟩
+      1 + 1 + 2 * from x
+    ≡⟨ Eq.cong (1 +_) refl ⟩
+      1 + (from (x1 x))
+    ∎
+
+from∘to : (n : ℕ) → from (to n) ≡ n
+from∘to zero    = refl
+from∘to (suc n) =
+    begin
+      from (to (suc n))
+    ≡⟨ Eq.cong from (to-homomorphism n) ⟩
+      from (inc (to n))
+    ≡⟨ from-homomorphism (to n) ⟩
+      suc (from (to n))
+    ≡⟨ Eq.cong suc (from∘to n) ⟩
+      suc n
+    ∎
 \end{code}
 
 
