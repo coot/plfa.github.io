@@ -34,7 +34,7 @@ open import Relation.Nullary.Negation using ()
 open import Data.Unit using (⊤; tt)
 open import Data.Empty using (⊥; ⊥-elim)
 open import plfa.Relations using (_<_; z<s; s<s)
-open import plfa.Isomorphism using (_⇔_)
+open import plfa.Isomorphism using (_⇔_; _≃_)
 \end{code}
 
 ## Evidence vs Computation
@@ -295,24 +295,43 @@ trouble normalising evidence of negation.)
 
 Analogous to the function above, define a function to decide strict inequality:
 \begin{code}
-postulate
-  _<?_ : ∀ (m n : ℕ) → Dec (m < n)
+¬s<z : ∀ {m : ℕ} → ¬ (m < zero)
+¬s<z ()
+
+¬s<s : ∀ {m n : ℕ} → ¬ (m < n) -> ¬ (suc m < suc n)
+¬s<s ¬m<n (s<s m<n) = ¬m<n m<n
+
+_<?_ : ∀ (m n : ℕ) → Dec (m < n)
+zero  <? suc n             = yes z<s
+_     <? zero              = no ¬s<z
+suc m <? suc n with m <? n
+...            | yes m<n   = yes (s<s m<n)
+...            | no ¬m<n   = no (¬s<s ¬m<n)
 \end{code}
 
-\begin{code}
--- Your code goes here
-\end{code}
+#### exercise `_≡ℕ?_`
 
-#### Exercise `_≡ℕ?_`
-
-Define a function to decide whether two naturals are equal:
+define a function to decide whether two naturals are equal:
 \begin{code}
-postulate
-  _≡ℕ?_ : ∀ (m n : ℕ) → Dec (m ≡ n)
-\end{code}
+z≢s : ∀ {m : ℕ} → ¬ (zero ≡ suc m)
+z≢s ()
 
-\begin{code}
--- Your code goes here
+s≢z : ∀ {m : ℕ} → ¬ (suc m ≡ zero)
+s≢z ()
+
+up : ∀ {m n : ℕ} → m ≡ n → suc m ≡ suc n
+up refl = refl
+
+¬up : ∀ {m n : ℕ} → ¬ (m ≡ n) → ¬ (suc m ≡ suc n)
+¬up ¬m≡n refl = ¬m≡n refl
+
+_≡ℕ?_ : ∀ (m n : ℕ) → Dec (m ≡ n)
+zero ≡ℕ?  zero               = yes refl
+zero ≡ℕ?  suc m              = no z≢s
+suc m ≡ℕ? zero               = no s≢z
+suc m ≡ℕ? suc n with m ≡ℕ? n
+...             | yes m≡ℕ?n  = yes (up m≡ℕ?n)
+...             | no  ¬m≡ℕ?n = no  (¬up ¬m≡ℕ?n)
 \end{code}
 
 
@@ -390,7 +409,6 @@ exactly when `m ≤ n` is inhabited:
 In summary, it is usually best to eschew booleans and rely on decidables.
 If you need booleans, they and their properties are easily derived from the
 corresponding decidables.
-
 
 ## Logical connectives
 
@@ -539,10 +557,31 @@ on which matches; but either is equally valid.
 
 Show that erasure relates corresponding boolean and decidable operations:
 \begin{code}
-postulate
-  ∧-× : ∀ {A B : Set} (x : Dec A) (y : Dec B) → ⌊ x ⌋ ∧ ⌊ y ⌋ ≡ ⌊ x ×-dec y ⌋
-  ∨-× : ∀ {A B : Set} (x : Dec A) (y : Dec B) → ⌊ x ⌋ ∨ ⌊ y ⌋ ≡ ⌊ x ⊎-dec y ⌋
-  not-¬ : ∀ {A : Set} (x : Dec A) → not ⌊ x ⌋ ≡ ⌊ ¬? x ⌋
+∧-lemma : ∀ (a : Bool) → a ∧ false ≡ false
+∧-lemma false = refl
+∧-lemma true  = refl
+
+∨-lemma : ∀ (a : Bool) → a ∨ true ≡ true
+∨-lemma false = refl
+∨-lemma true = refl
+
+∧-× : ∀ {a b : Set} (x : Dec a) (y : Dec b) → ⌊ x ⌋ ∧ ⌊ y ⌋ ≡ ⌊ x ×-dec y ⌋
+∧-× (yes a) (yes b) = refl
+∧-× (no ¬a) _       = refl
+∧-× x       (no ¬b) with x ×-dec (no ¬b)
+...                       | no _          = ∧-lemma ⌊ x ⌋
+...                       | yes ⟨ _ , b ⟩ = ⊥-elim (¬b b)
+
+∨-× : ∀ {A B : Set} (x : Dec A) (y : Dec B) → ⌊ x ⌋ ∨ ⌊ y ⌋ ≡ ⌊ x ⊎-dec y ⌋
+∨-× (yes a) _       = refl
+∨-× x       (yes b) with x ⊎-dec (yes b)
+...                     | yes _   = ∨-lemma ⌊ x ⌋
+...                     | no ¬a∨b = ⊥-elim (¬a∨b (inj₂ b))
+∨-× (no _)  (no _)  = refl
+
+not-¬ : ∀ {A : Set} (x : Dec A) → not ⌊ x ⌋ ≡ ⌊ ¬? x ⌋
+not-¬ (yes a) = refl
+not-¬ (no ¬a) = refl
 \end{code}
 
 #### Exercise `iff-erasure` (recommended)
@@ -551,14 +590,30 @@ Give analogues of the `_⇔_` operation from
 Chapter [Isomorphism][plfa.Isomorphism#iff],
 operation on booleans and decidables, and also show the corresponding erasure:
 \begin{code}
-postulate
-  _iff_ : Bool → Bool → Bool
-  _⇔-dec_ : ∀ {A B : Set} → Dec A → Dec B → Dec (A ⇔ B)
-  iff-⇔ : ∀ {A B : Set} (x : Dec A) (y : Dec B) → ⌊ x ⌋ iff ⌊ y ⌋ ≡ ⌊ x ⇔-dec y ⌋
-\end{code}
+_iff_ : Bool → Bool → Bool
+true  iff true  = true
+false iff false = true
+_     iff _     = false
 
-\begin{code}
--- Your code goes here
+_⇔-dec_ : ∀ {A B : Set} → Dec A → Dec B → Dec (A ⇔ B)
+(yes a) ⇔-dec (yes b) = yes
+  record
+    { to   = λ _ → b
+    ; from = λ _ → a
+    }
+(no ¬a) ⇔-dec (no ¬b) = yes
+  record
+    { to   = λ a → ⊥-elim (¬a a)
+    ; from = λ b → ⊥-elim (¬b b)
+    }
+(yes a) ⇔-dec (no ¬b) = no λ a⇔b → ¬b (_⇔_.to a⇔b a)
+(no ¬a) ⇔-dec (yes b) = no λ a⇔b → ¬a (_⇔_.from a⇔b b)
+
+iff-⇔ : ∀ {A B : Set} (x : Dec A) (y : Dec B) → ⌊ x ⌋ iff ⌊ y ⌋ ≡ ⌊ x ⇔-dec y ⌋
+iff-⇔ (yes a) (yes b) = refl
+iff-⇔ (no ¬a) (no ¬b) = refl
+iff-⇔ (yes a) (no ¬b) = refl
+iff-⇔ (no ¬a) (yes b) = refl
 \end{code}
 
 ## Standard Library
