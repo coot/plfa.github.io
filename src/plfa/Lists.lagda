@@ -18,7 +18,7 @@ examples of polymorphic types and higher-order functions.
 
 \begin{code}
 import Relation.Binary.PropositionalEquality as Eq
-open Eq using (_≡_; refl; sym; trans; cong)
+open Eq using (_≡_; refl; sym; trans; cong; cong₂)
 open Eq.≡-Reasoning
 open import Data.Bool using (Bool; true; false; T; _∧_; _∨_; not)
 open import Data.Nat using (ℕ; zero; suc; _+_; _*_; _∸_; _≤_; s≤s; z≤n)
@@ -26,9 +26,10 @@ open import Data.Nat.Properties using
   (+-assoc; +-identityˡ; +-identityʳ; *-assoc; *-identityˡ; *-identityʳ)
 open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Data.Product using (_×_; ∃; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
+open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Function using (_∘_)
 open import Level using (Level)
-open import plfa.Isomorphism using (_≃_; _⇔_)
+open import plfa.Isomorphism using (_≃_; _⇔_; extensionality)
 \end{code}
 
 
@@ -529,9 +530,24 @@ _n_ functions.
 
 Prove that the map of a composition is equal to the composition of two maps:
 \begin{code}
-postulate
-  map-compose : ∀ {A B C : Set} {f : A → B} {g : B → C}
+map-compose : ∀ {A B C : Set} {f : A → B} {g : B → C}
     → map (g ∘ f) ≡ map g ∘ map f
+map-compose {A} {B} {C} {f} {g} = extensionality (proof f g)
+  where
+    proof : ∀ {A B C : Set} (f : A → B) (g : B → C) → (as : List A) → map (g ∘ f) as ≡ (map g ∘ map f) as
+    proof f g []       = refl
+    proof f g (a ∷ as) =
+      begin
+        map (g ∘ f) (a ∷ as)
+      ≡⟨⟩
+        (g ∘ f) a ∷ map (g ∘ f) as
+      ≡⟨⟩
+        g (f a) ∷ map (g ∘ f) as
+      ≡⟨ cong (g (f a) ∷_) (proof f g as) ⟩
+        g (f a) ∷ (map g ∘ map f) as
+      ≡⟨⟩
+        (map g ∘ map f) (a ∷ as)
+      ∎
 \end{code}
 The last step of the proof requires extensionality.
 
@@ -634,9 +650,21 @@ For example:
 
 Show that fold and append are related as follows:
 \begin{code}
-postulate
-  foldr-++ : ∀ {A B : Set} (_⊗_ : A → B → B) (e : B) (xs ys : List A) →
+foldr-++ : ∀ {A B : Set} (_⊗_ : A → B → B) (e : B) (xs ys : List A) →
     foldr _⊗_ e (xs ++ ys) ≡ foldr _⊗_ (foldr _⊗_ e ys) xs
+foldr-++ _⊗_ e [] ys = refl
+foldr-++ _⊗_ e (x ∷ xs) ys =
+  begin
+    foldr _⊗_ e (x ∷ xs ++ ys)
+  ≡⟨⟩
+    foldr _⊗_ e (x ∷ (xs ++ ys))
+  ≡⟨⟩
+    x ⊗ foldr _⊗_ e (xs ++ ys)
+  ≡⟨ cong (x ⊗_) (foldr-++ _⊗_ e xs ys) ⟩
+    x ⊗ foldr _⊗_ (foldr _⊗_ e ys) xs
+  ≡⟨⟩
+    foldr _⊗_ (foldr _⊗_ e ys) (x ∷ xs)
+  ∎
 \end{code}
 
 
@@ -644,9 +672,25 @@ postulate
 
 Show that map can be defined using fold:
 \begin{code}
-postulate
-  map-is-foldr : ∀ {A B : Set} {f : A → B} →
+map-is-foldr : ∀ {A B : Set} {f : A → B} →
     map f ≡ foldr (λ x xs → f x ∷ xs) []
+map-is-foldr {A} {B} {f} = extensionality (proof f)
+  where
+    proof : ∀ {A B : Set}
+          → (f : A → B)
+          → (as : List A)
+          → map f as ≡ foldr (λ x xs → f x ∷ xs) [] as
+    proof f []       = refl
+    proof f (a ∷ as) =
+      begin
+        map f (a ∷ as)
+      ≡⟨⟩
+        f a ∷ map f as
+      ≡⟨ cong (f a ∷_) (proof f as) ⟩
+       f a ∷ foldr (λ x xs → f x ∷ xs) [] as
+      ≡⟨⟩
+        foldr (λ x xs → f x ∷ xs) [] (a ∷ as) 
+      ∎
 \end{code}
 This requires extensionality.
 
@@ -789,8 +833,25 @@ operations associate to the left rather than the right.  For example:
     foldr _⊗_ e [ x , y , z ]  =  x ⊗ (y ⊗ (z ⊗ e))
     foldl _⊗_ e [ x , y , z ]  =  ((e ⊗ x) ⊗ y) ⊗ z
 
+     x ⊗ (y ⊗ (z ⊗ e)
+    (x ⊗ (y ⊗ (z ⊗ e)))
+    (x ⊗ y) ⊗ (z ⊗ e)
+    (x ⊗ y) ⊗ z
+    ((e ⊗ x) ⊗ y) ⊗ z
+
+     w ⊗ (x ⊗ (y ⊗ (z ⊗ e)))
+     ≡⟨ cong (w ⊗_) foldr-≡-fold ⟩
+     w ⊗ (((e ⊗ x) ⊗ y) ⊗ z)
+     (w ⊗ ((e ⊗ x) ⊗ y)) ⊗ z
+     -- induction, this step is the same as the previous one:
+
+     w ⊗ foldl _⊗_ x xs = foldl _⊗_ (w ⊗ x) xs
+
+
 \begin{code}
--- Your code goes here
+foldl : ∀ {A B : Set} → (B → A → B) → B → List A → B
+foldl _⊗_ e []       = e
+foldl _⊗_ e (x ∷ xs) = foldl _⊗_ (e ⊗ x) xs
 \end{code}
 
 
@@ -800,7 +861,56 @@ Show that if `_⊗_` and `e` form a monoid, then `foldr _⊗_ e` and
 `foldl _⊗_ e` always compute the same result.
 
 \begin{code}
--- Your code goes here
+foldr-≡-foldl : ∀ {A : Set} → (_⊗_ : A → A → A) → (e : A) → IsMonoid (_⊗_) e → foldr _⊗_ e ≡ foldl _⊗_ e
+foldr-≡-foldl {A} (_⊗_) e monoid-⊗ = extensionality proof
+  where
+    -- This lemma proves that 'foldl' satisfies the same law as 'foldr', for
+    -- 'foldr' this is trivial.
+    lemma : (x : A) → (y : A)
+          → (ys : List A)
+          →  x ⊗ foldl _⊗_ y ys ≡ foldl _⊗_ (x ⊗ y) ys
+    lemma x y []         = refl
+    lemma x y₀ (y₁ ∷ ys) = 
+        begin
+          x ⊗ foldl _⊗_ y₀ (y₁ ∷ ys)
+        ≡⟨⟩
+          x ⊗ foldl _⊗_ (y₀ ⊗ y₁) ys
+        ≡⟨ lemma x (y₀ ⊗ y₁) ys  ⟩
+          foldl _⊗_ (x ⊗ (y₀ ⊗ y₁)) ys
+        ≡⟨ cong₂ (foldl _⊗_) (sym (assoc monoid-⊗ x y₀ y₁)) ysRefl ⟩
+          foldl _⊗_ ((x ⊗ y₀) ⊗ y₁) ys
+        ≡⟨⟩
+          foldl _⊗_ (x ⊗ y₀) (y₁ ∷ ys)
+        ≡⟨⟩
+          foldl _⊗_ x (y₀ ∷ y₁ ∷ ys)
+        ∎
+      where
+        -- agda nees some help when solving constraints in 'cong₂'
+        ysRefl : ys ≡ ys
+        ysRefl = refl
+
+    proof : (xs : List A)
+          → foldr _⊗_ e xs ≡ foldl _⊗_ e xs
+    proof []       = refl
+    proof (x ∷ xs) =
+        begin
+          foldr (_⊗_) e (x ∷ xs)
+        ≡⟨⟩
+          x ⊗ foldr (_⊗_) e xs
+        ≡⟨ cong (x ⊗_) (proof xs) ⟩
+          x ⊗ foldl (_⊗_) e xs
+        ≡⟨ lemma x e xs ⟩
+          foldl (_⊗_) (x ⊗ e) xs
+        ≡⟨ cong₂ (foldl _⊗_) (identityʳ monoid-⊗ x) xsRefl ⟩
+          foldl (_⊗_) x xs
+        ≡⟨ cong₂ (foldl _⊗_) (sym (identityˡ monoid-⊗ x)) xsRefl ⟩
+          foldl (_⊗_) (e ⊗ x) xs
+        ≡⟨⟩
+          foldl (_⊗_) e (x ∷ xs)
+        ∎
+      where
+        xsRefl : xs ≡ xs
+        xsRefl = refl
 \end{code}
 
 
@@ -918,7 +1028,35 @@ replacement for `_×_`.  As a consequence, demonstrate an equivalence relating
 `_∈_` and `_++_`.
 
 \begin{code}
--- Your code goes here
+Any-++-⇔ : ∀ {A : Set} {P : A → Set} (xs ys : List A) →
+  Any P (xs ++ ys) ⇔ (Any P xs ⊎ Any P ys)
+Any-++-⇔ xs ys =
+  record
+    { to   = to xs ys
+    ; from = from xs ys
+    }
+  where
+
+  to : ∀ {A : Set} {P : A → Set}
+       (xs ys : List A)
+     → Any P (xs ++ ys)
+     → Any P xs ⊎ Any P ys
+  to [] ys Pys             = inj₂ Pys
+  to (x ∷ xs) ys (here Px) = inj₁ (here Px)
+  to (x ∷ xs) ys (there Pxs++ys) with to xs ys Pxs++ys
+  ...                            | inj₁ Pxs = inj₁ (there Pxs)
+  ...                            | inj₂ Pys = inj₂ Pys
+
+  from : ∀ {A : Set} {P : A → Set}
+         (xs ys : List A)
+       → Any P xs ⊎ Any P ys
+       → Any P (xs ++ ys)
+  from []       ys (inj₂ Py)          = Py
+  from []       ys (inj₁ ()) -- agda can infer that this is not possible
+                             -- just for the sake of completness
+  from (x ∷ xs) ys (inj₁ (here Px))   = here Px
+  from (x ∷ xs) ys (inj₁ (there Pxs)) = there (from xs ys (inj₁ Pxs))
+  from (x ∷ xs) ys (inj₂ Pys)         = there (from xs ys (inj₂ Pys))
 \end{code}
 
 #### Exercise `All-++-≃` (stretch)
@@ -1001,7 +1139,8 @@ analogues `any` and `Any?` which determine whether a predicate holds
 for some element of a list.  Give their definitions.
 
 \begin{code}
--- Your code goes here
+any : ∀ {A : Set} → (A → Bool) → List A → Bool
+any p = foldr _∨_ false ∘ map p
 \end{code}
 
 
@@ -1010,7 +1149,100 @@ for some element of a list.  Give their definitions.
 Show that `All P xs` is isomorphic to `∀ {x} → x ∈ xs → P x`.
 
 \begin{code}
--- You code goes here
+postulate
+  ∃-extensionality
+    : ∀ {A : Set} {P : A → Set} {f : ∀ {x : A} → P x} {g : ∀ {y : A} → P y}
+    → (∀ {x : A} → f {x} ≡ g {x})
+      ---------------------------
+    → f ≡ g
+
+All-∀ : ∀ {A : Set} {P : A → Set}
+      → (xs : List A)
+      → All P xs ≃ (∀ {x : A} → x ∈ xs → P x)
+All-∀ {A} {P} xs =
+  record
+    { to      = to xs
+    ; from    = from xs
+    ; to∘from = λ f → let lemma : to xs (from xs f) ≡ f
+                          lemma = ∃-extensionality
+                                    λ {x} →
+                                      extensionality
+                                        (λ (x∈xs : x ∈ xs) → to∘from xs f {x} x∈xs)
+
+                      -- I don't know how to use the lemma here to get rid
+                      -- of implicit parameter error.
+                          
+                      in ? -- lemma
+    ; from∘to = from∘to xs
+    }
+  where
+    to : ∀ {A : Set} {P : A → Set}
+       → (xs : List A)
+       → All P xs
+       → (∀ {x} → x ∈ xs → P x)
+    to [] [] ()
+    to (x ∷ xs) (Px ∷ Pxs) (here refl) = Px
+    to (x ∷ xs) (Px ∷ Pxs) (there any) = to xs Pxs any
+
+    from : ∀ {A : Set} {P : A → Set}
+         → (xs : List A)
+         → (∀ {x} → x ∈ xs → P x)
+         → All P xs
+    from [] _ = []
+    from (x ∷ xs) f = f (here refl) ∷ from xs (f ∘ there)
+
+    to∘from : ∀ {A : Set} {P : A → Set}
+            → (xs : List A)
+            → (f : ∀ {x} → x ∈ xs → P x)
+            → (∀ {x} → (x∈xs : x ∈ xs) → to xs (from xs f) x∈xs ≡ f x∈xs)
+    to∘from [] f = λ ()
+    to∘from (x ∷ xs) f = λ
+      { (here refl) →
+          begin
+            to (x ∷ xs) (from (x ∷ xs) f) (here refl)
+            -- expand 'from'
+          ≡⟨⟩
+            to (x ∷ xs) (f (here refl) ∷ from xs (f ∘ there)) (here refl)
+            -- use definition of 'to'
+          ≡⟨⟩
+            f (here refl)
+          ∎
+      ; (there nxt) →
+          begin
+            to (x ∷ xs) (from (x ∷ xs) f) (there nxt)
+            -- expand 'from'
+          ≡⟨⟩
+            to (x ∷ xs) (f (here refl) ∷ from xs (f ∘ there)) (there nxt)
+            -- use definition of 'to'
+          ≡⟨⟩
+            to xs (from xs (f ∘ there)) nxt
+            -- recurse
+          ≡⟨ to∘from xs (f ∘ there) nxt  ⟩
+            f (there nxt)
+          ∎
+      }
+  
+    from∘to : ∀ {A : Set} {P : A → Set}
+            → (xs : List A)
+            → (y : All P xs)
+            → from xs (to xs y) ≡ y
+    from∘to [] [] = refl
+    from∘to (x ∷ xs) (Px ∷ Pxs) =
+      begin
+        from (x ∷ xs) (to (x ∷ xs) (Px ∷ Pxs))
+        -- expand 'from'
+      ≡⟨⟩
+        to (x ∷ xs) (Px ∷ Pxs) (here refl) ∷ from xs (to (x ∷ xs) (Px ∷ Pxs) ∘ there)
+        -- defintion of 'to'
+      ≡⟨⟩
+        Px ∷ from xs (to (x ∷ xs) (Px ∷ Pxs) ∘ there)
+        -- expand 'to' once again
+      ≡⟨⟩
+        Px ∷ from xs (to xs Pxs)
+        -- induction / recursion
+      ≡⟨ cong (Px ∷_) (from∘to xs Pxs) ⟩
+        Px ∷ Pxs
+      ∎
 \end{code}
 
 
@@ -1029,9 +1261,14 @@ Define the following variant of the traditional `filter` function on lists,
 which given a decidable predicate and a list returns all elements of the
 list satisfying the predicate:
 \begin{code}
-postulate
-  filter? : ∀ {A : Set} {P : A → Set}
-    → (P? : Decidable P) → List A → ∃[ ys ]( All P ys )
+filter? : ∀ {A : Set} {P : A → Set}
+        → (P? : Decidable P)
+        → List A
+        → ∃[ ys ]( All P ys )
+filter? p? [] = ⟨ [] , [] ⟩
+filter? p? (x ∷ xs) with p? x | filter? p? xs
+...                  | yes p  | ⟨ ys , ps ⟩ = ⟨ x ∷ ys , p ∷ ps ⟩
+...                  | no  _  | ⟨ ys , ps ⟩ = ⟨     ys ,     ps ⟩
 \end{code}
 
 
