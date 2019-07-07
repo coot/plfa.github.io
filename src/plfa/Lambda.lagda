@@ -53,6 +53,7 @@ four.
 
 \begin{code}
 open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl)
+import Relation.Binary.PropositionalEquality as Eq
 open import Data.String using (String)
 open import Data.String.Unsafe using (_≟_)
 open import Data.Nat using (ℕ; zero; suc)
@@ -60,6 +61,8 @@ open import Data.Empty using (⊥; ⊥-elim)
 open import Relation.Nullary using (Dec; yes; no; ¬_)
 open import Relation.Nullary.Negation using (¬?)
 open import Data.List using (List; _∷_; [])
+open import Data.Product using (_×_) renaming (_,_ to ⟨_,_⟩)
+open import plfa.Isomorphism using (_≃_)
 \end{code}
 
 ## Syntax of terms
@@ -194,7 +197,11 @@ two natural numbers.  Your definition may use `plus` as
 defined earlier.
 
 \begin{code}
--- Your code goes here
+mul : Term
+mul = μ "*" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+      case ` "m"
+        [zero⇒ `zero
+        |suc "m'" ⇒ plus · (` "*" · ` "m'" · ` "n") · ` "n" ]
 \end{code}
 
 
@@ -206,7 +213,9 @@ definition may use `plusᶜ` as defined earlier (or may not
 — there are nice definitions both ways).
 
 \begin{code}
--- Your code goes here
+mulᶜ : Term
+mulᶜ = μ "*" ⇒ ƛ "m" ⇒ ƛ "n" ⇒ ƛ "s" ⇒ ƛ "z" ⇒
+        ` "m" · (` "n" · ` "s") · ` "z"
 \end{code}
 
 
@@ -691,6 +700,9 @@ data _—↠_ : Term → Term → Set where
       ---------
     → L —↠ N
 
+-- NOTE: it seems that `_—↠_` makes `Term` a category, where `_∎` is the
+-- identity arrow, and `_—↠⟨_⟩_`  is composition.
+
 begin_ : ∀ {M N}
   → M —↠ N
     ------
@@ -786,6 +798,7 @@ In symbols:
       → L —→ N
         ------
       → M ≡ N
+
 
 It is easy to show that every deterministic relation satisfies
 the diamond property, and that every relation that satisfies
@@ -1009,7 +1022,48 @@ to the list
     [ ⟨ "z" , `ℕ ⟩ , ⟨ "s" , `ℕ ⇒ `ℕ ⟩ ]
 
 \begin{code}
--- Your code goes here
+Context-≃ : Context ≃ List (Id × Type)
+Context-≃ =
+  record
+    { to   = to
+    ; from = from
+    ; from∘to = from∘to
+    ; to∘from = to∘from
+    }
+  where
+    to : Context → List (Id × Type)
+    to ∅ = []
+    to (Γ , x ⦂ A) = ⟨ x , A ⟩ ∷ to Γ
+
+    from : List (Id × Type) → Context
+    from [] = ∅
+    from (⟨ x , A ⟩ ∷ xs) = from xs , x ⦂ A
+
+    from∘to : (c : Context) → from (to c) ≡ c
+    from∘to ∅ = refl
+    from∘to (Γ , x ⦂ A) =
+      Eq.≡-Reasoning.begin
+        from (to (Γ , x ⦂ A))
+      Eq.≡-Reasoning.≡⟨⟩
+        from (⟨ x , A ⟩ ∷ to Γ)
+      Eq.≡-Reasoning.≡⟨⟩
+        from (to Γ) , x ⦂ A
+      Eq.≡-Reasoning.≡⟨ Eq.cong (_, x ⦂ A) (from∘to Γ) ⟩
+        Γ , x ⦂ A
+      Eq.≡-Reasoning.∎
+
+    to∘from : (a : List (Id × Type)) → to (from a) ≡ a
+    to∘from [] = refl
+    to∘from (⟨ x , A ⟩ ∷ xs) =
+      Eq.≡-Reasoning.begin
+        to (from (⟨ x , A ⟩ ∷ xs))
+      Eq.≡-Reasoning.≡⟨⟩
+        to (from xs , x ⦂ A)
+      Eq.≡-Reasoning.≡⟨⟩
+        ⟨ x , A ⟩ ∷ to (from xs)
+      Eq.≡-Reasoning.≡⟨ Eq.cong (⟨ x , A ⟩ ∷_) (to∘from xs) ⟩
+        (⟨ x , A ⟩ ∷ xs)
+      Eq.≡-Reasoning.∎
 \end{code}
 
 ### Lookup judgment
@@ -1211,11 +1265,12 @@ Here is the above typing derivation formalised in Agda:
 \begin{code}
 Ch : Type → Type
 Ch A = (A ⇒ A) ⇒ A ⇒ A
-
 ⊢twoᶜ : ∀ {Γ A} → Γ ⊢ twoᶜ ⦂ Ch A
 ⊢twoᶜ = ⊢ƛ (⊢ƛ (⊢` ∋s · (⊢` ∋s · ⊢` ∋z)))
   where
+  ∋s : ∀ {Γ : Context} {A} → Γ , "s" ⦂ A ⇒ A , "z" ⦂ A ∋ "s" ⦂ A ⇒ A
   ∋s = S ("s" ≠ "z") Z
+  ∋z : ∀ {Γ : Context} {A} → Γ , "z" ⦂ A ∋ "z" ⦂ A
   ∋z = Z
 \end{code}
 
@@ -1372,7 +1427,22 @@ Using the term `mul` you defined earlier, write out the derivation
 showing that it is well-typed.
 
 \begin{code}
--- Your code goes here
+⊢mul : ∀ {Γ} → Γ ⊢ mul ⦂ `ℕ ⇒ `ℕ ⇒ `ℕ
+⊢mul = ⊢μ (⊢ƛ (⊢ƛ
+  (⊢case (⊢` ∋m) ⊢zero
+    (⊢μ (⊢ƛ (⊢ƛ
+      (⊢case (⊢` ∋m′) (⊢` ∋n) (⊢suc (⊢` ∋+ · ⊢` ∋m′′ · ⊢` ∋n′)))))
+        · (⊢` ∋* · ⊢` ∋m' · ⊢` ∋n′′) · ⊢` ∋n′′))))
+  where
+  ∋m   = S ("m" ≠ "n") Z
+  ∋m′  = S ("m" ≠ "n") Z
+  ∋n   = Z
+  ∋+   = S ("+" ≠ "m") (S ("+" ≠ "n") (S ("+" ≠ "m") Z))
+  ∋m′′ = Z
+  ∋n′  = S ("n" ≠ "m") Z
+  ∋*   = S ("*" ≠ "m'") (S ("*" ≠ "n") (S ("*" ≠ "m") Z))
+  ∋m'  = Z
+  ∋n′′ = S ("n" ≠ "m'") Z 
 \end{code}
 
 
@@ -1382,7 +1452,13 @@ Using the term `mulᶜ` you defined earlier, write out the derivation
 showing that it is well-typed.
 
 \begin{code}
--- Your code goes here
+⊢mulᶜ : ∀ {Γ A} → Γ ⊢ mulᶜ ⦂ Ch A ⇒ Ch A ⇒ Ch A
+⊢mulᶜ = ⊢μ (⊢ƛ (⊢ƛ (⊢ƛ (⊢ƛ (⊢` ∋m · (⊢` ∋n · ⊢` ∋s) · ⊢` ∋z)))))
+  where
+  ∋n = S ("n" ≠ "z") (S ("n" ≠ "s") Z)
+  ∋m = S ("m" ≠ "z") (S ("m" ≠ "s") (S ("m" ≠ "n") Z))
+  ∋s = S ("s" ≠ "z") Z
+  ∋z = Z
 \end{code}
 
 
